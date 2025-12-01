@@ -40,10 +40,11 @@ public class App {
     public static void main(String[] args) {
         OpenCV.loadLocally();
 
+        // INITIALIZATION 
         // Initialize the Excel Exporter
         ExcelExporter exporter = new ExcelExporter("detection_log.xlsx");
 
-        // Loading the YOLOv8 Model
+        // Load the YOLOv8 Model from the models folder
         String modelPath = "models/license_plate_best.onnx";
         Net net;
         try {
@@ -55,7 +56,7 @@ public class App {
             return; // Exit if the model cannot be loaded
         }
 
-        // Initialize Tesseract
+        // Initialize the Tesseract OCR engine
         Tesseract tesseract = new Tesseract();
         try {
             // The path to the "tessdata" folder
@@ -66,10 +67,10 @@ public class App {
             return;
         }
 
-        // The URL should be http and point to the /video endpoint
+        // Define the URL for the IP Webcam stream
         String ipCamUrl = "http://192.168.31.214:8080/video";
 
-        // VideoCapture object to access the webcam stream
+        // Create a VideoCapture object to access the camera stream
         VideoCapture cap = new VideoCapture(ipCamUrl);
 
         // Check if the stream is opened successfully
@@ -78,11 +79,14 @@ public class App {
             return; // Exit if the stream cannot be opened
         }
 
-        // Mat object to store the video frame
+        // Create a Mat object to store the current video frame
         Mat frame = new Mat();
         String windowName = "Live Video Feed";
         HighGui.namedWindow(windowName);
 
+        System.out.println("\n--- System Initialized. Starting video stream... ---");
+
+        // VIDEO PROCESSING LOOP 
         // Loop to continuously read frames from the stream
         while (true) {
             if (cap.read(frame)) {
@@ -101,6 +105,7 @@ public class App {
                 // Transpose the table to have detections as rows [8400, 5]
                 Core.transpose(detections, detections);
 
+                // POST-PROCESSING AND OCR 
                 // Loop through all the detections
                 float confidenceThreshold = 0.5f; // Only consider detections with 50% or more confidence
                 for (int i = 0; i < detections.rows(); i++) {
@@ -138,7 +143,7 @@ public class App {
                             continue; // Skip to the next detection if ROI is invalid
                         }
 
-                        // --- ASPECT RATIO FILTER ---
+                        // ASPECT RATIO FILTER 
                         // Check the shape of the bounding box to filter out non-plate objects
                         double aspectRatio = (double) (clampedX2 - clampedX1) / (clampedY2 - clampedY1);
                         if (aspectRatio < 1.5 || aspectRatio > 5.5) {
@@ -149,7 +154,7 @@ public class App {
 
                         Imgproc.rectangle(frame, new Point(clampedX1, clampedY1), new Point(clampedX2, clampedY2), new Scalar(0, 255, 0), 2);
 
-                        // --- OCR PART ---
+                        // OCR PART 
                         // Crop the license plate from the original frame
                         Rect roi = new Rect(new Point(clampedX1, clampedY1), new Point(clampedX2, clampedY2));
                         Mat licensePlate = new Mat(frame, roi);
@@ -162,7 +167,7 @@ public class App {
 
                         String correctedText = "";
                         try {
-                            // --- PRE-PROCESSING FOR OCR ---
+                            // PRE-PROCESSING FOR OCR 
                             Mat grayPlate = new Mat();
                             Imgproc.cvtColor(licensePlate, grayPlate, Imgproc.COLOR_BGR2GRAY);
 
@@ -184,14 +189,14 @@ public class App {
                             System.out.println("Tesseract Error: " + e.getMessage());
                         }
 
-                        // --- STABILIZATION LOGIC ---
+                        // STABILIZATION LOGIC 
                         String boxId = getBoxId(clampedX1, clampedY1, clampedX2, clampedY2);
                         String stableText = getStablePlate(boxId, correctedText);
 
                         // Print the recognized text
                         // System.out.println("BoxID: " + boxId + " | Corrected: " + correctedText + " -> Stable: " + stableText);
 
-                        // --- API CALL LOGIC ---
+                        // API CALL LOGIC 
                         // Check if the stable text is a valid plate and has not been processed yet
                         if (stableText != null && !stableText.isEmpty() && !processedPlates.contains(stableText)) {
                             // Apply the strict regex pattern validation
@@ -244,6 +249,7 @@ public class App {
             }
         }
 
+        // CLEANUP 
         // Release the VideoCapture object to free resources
         cap.release();
         exporter.close(); // Save the Excel file before exiting
