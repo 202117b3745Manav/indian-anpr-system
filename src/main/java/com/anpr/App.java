@@ -40,6 +40,9 @@ public class App {
     public static void main(String[] args) {
         OpenCV.loadLocally();
 
+        // Initialize the Excel Exporter
+        ExcelExporter exporter = new ExcelExporter("detection_log.xlsx");
+
         // Loading the YOLOv8 Model
         String modelPath = "models/license_plate_best.onnx";
         Net net;
@@ -197,6 +200,7 @@ public class App {
                                 VehicleDetails details = VehicleApiClient.fetchVehicleDetails(stableText);
                                 if (details != null) {
                                     System.out.println(details.toString());
+                                    exporter.appendRow(stableText, details); // Add data to Excel
                                 }
                                 processedPlates.add(stableText); // Mark this plate as processed
                             }
@@ -242,6 +246,7 @@ public class App {
 
         // Release the VideoCapture object to free resources
         cap.release();
+        exporter.close(); // Save the Excel file before exiting
         HighGui.destroyAllWindows();
         System.out.println("Stream stopped and resources released.");
     }
