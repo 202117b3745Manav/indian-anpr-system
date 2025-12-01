@@ -3,9 +3,11 @@ package com.anpr;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
@@ -29,6 +31,11 @@ public class App {
     // Stores the history of OCR readings for a given box ID
     private static Map<String, Deque<String>> plateHistory = new HashMap<>();
     private static final int HISTORY_SIZE = 10;
+    // Stores plate numbers that have already been processed to avoid duplicate API calls
+    private static HashSet<String> processedPlates = new HashSet<>();
+    // Regex for common Indian license plate formats
+    private static final Pattern platePattern = Pattern.compile("^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$");
+
 
     public static void main(String[] args) {
         OpenCV.loadLocally();
@@ -128,6 +135,15 @@ public class App {
                             continue; // Skip to the next detection if ROI is invalid
                         }
 
+                        // --- ASPECT RATIO FILTER ---
+                        // Check the shape of the bounding box to filter out non-plate objects
+                        double aspectRatio = (double) (clampedX2 - clampedX1) / (clampedY2 - clampedY1);
+                        if (aspectRatio < 1.5 || aspectRatio > 5.5) {
+                            // This is likely not a license plate, skip it
+                            // System.out.println("Skipping ROI with invalid aspect ratio: " + aspectRatio);
+                            continue;
+                        }
+
                         Imgproc.rectangle(frame, new Point(clampedX1, clampedY1), new Point(clampedX2, clampedY2), new Scalar(0, 255, 0), 2);
 
                         // --- OCR PART ---
@@ -170,7 +186,21 @@ public class App {
                         String stableText = getStablePlate(boxId, correctedText);
 
                         // Print the recognized text
-                        System.out.println("BoxID: " + boxId + " | Corrected: " + correctedText + " -> Stable: " + stableText);
+                        // System.out.println("BoxID: " + boxId + " | Corrected: " + correctedText + " -> Stable: " + stableText);
+
+                        // --- API CALL LOGIC ---
+                        // Check if the stable text is a valid plate and has not been processed yet
+                        if (stableText != null && !stableText.isEmpty() && !processedPlates.contains(stableText)) {
+                            // Apply the strict regex pattern validation
+                            if (platePattern.matcher(stableText).matches()) {
+                                System.out.println("\n--- New Valid Plate Detected: " + stableText + " ---");
+                                VehicleDetails details = VehicleApiClient.fetchVehicleDetails(stableText);
+                                if (details != null) {
+                                    System.out.println(details.toString());
+                                }
+                                processedPlates.add(stableText); // Mark this plate as processed
+                            }
+                        }
 
                         // Draw the STABLE recognized text on the frame
                         Imgproc.putText(
@@ -195,8 +225,18 @@ public class App {
                     break;
                 }
             } else {
-                System.out.println("Error: Could not read a frame from the video stream. Exiting.");
-                break;
+                System.out.println("Error: Could not read a frame. Attempting to reconnect...");
+                cap.release(); // Release the broken connection
+                try {
+                    Thread.sleep(2000); // Wait 2 seconds before reconnecting
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                cap = new VideoCapture(ipCamUrl); // Re-establish the connection
+                if (!cap.isOpened()) {
+                    System.out.println("Reconnect failed. Exiting.");
+                    break;
+                }
             }
         }
 
