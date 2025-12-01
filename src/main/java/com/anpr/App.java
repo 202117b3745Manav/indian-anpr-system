@@ -3,11 +3,25 @@ package com.anpr;
 import org.opencv.core.Mat;
 import org.opencv.videoio.VideoCapture;
 import org.opencv.highgui.HighGui;
+import org.opencv.dnn.Net;
+import org.opencv.dnn.Dnn;
 import nu.pattern.OpenCV;
 
 public class App {
     public static void main(String[] args) {
         OpenCV.loadLocally();
+
+        // Loading the YOLOv8 Model
+        String modelPath = "models/license_plate_best.onnx";
+        Net net;
+        try {
+            net = Dnn.readNetFromONNX(modelPath);
+            System.out.println("Success: YOLOv8 model loaded from " + modelPath);
+        } catch (Exception e) {
+            System.out.println("Error: Could not load the YOLOv8 model.");
+            System.out.println(e.getMessage());
+            return; // Exit if the model cannot be loaded
+        }
 
         // The URL should be http and point to the /video endpoint
         String ipCamUrl = "http://192.168.31.214:8080/video";
