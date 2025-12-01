@@ -2,7 +2,7 @@ package com.anpr;
 
 import org.opencv.core.Mat;
 import org.opencv.videoio.VideoCapture;
-import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.highgui.HighGui;
 import nu.pattern.OpenCV;
 
 public class App {
@@ -21,21 +21,30 @@ public class App {
             return; // Exit if the stream cannot be opened
         }
 
-        // Object to store the video frame
+        // Mat object to store the video frame
         Mat frame = new Mat();
+        String windowName = "Live Video Feed";
+        HighGui.namedWindow(windowName);
 
-        // Reading a frame from the video stream
-        boolean success = cap.read(frame);
+        // Loop to continuously read frames from the stream
+        while (true) {
+            if (cap.read(frame)) {
+                // Display the frame in the window
+                HighGui.imshow(windowName, frame);
 
-        // If a frame was successfully read, save it to a file
-        if (success) {
-            Imgcodecs.imwrite("output.png", frame);
-            System.out.println("Success! Frame captured and saved to output.png");
-        } else {
-            System.out.println("Error: Could not read a frame from the video stream");
+                // Wait for 1ms for a key press. If a key is pressed, break the loop.
+                if (HighGui.waitKey(1) >= 0) {
+                    break;
+                }
+            } else {
+                System.out.println("Error: Could not read a frame from the video stream. Exiting.");
+                break;
+            }
         }
 
         // Release the VideoCapture object to free resources
         cap.release();
+        HighGui.destroyAllWindows();
+        System.out.println("Stream stopped and resources released.");
     }
 }
