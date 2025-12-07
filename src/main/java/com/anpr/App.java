@@ -42,10 +42,10 @@ public class App {
 
         // INITIALIZATION 
         // Initialize the Excel Exporter
-        ExcelExporter exporter = new ExcelExporter("detection_log.xlsx");
+        ExcelExporter exporter = new ExcelExporter(ConfigLoader.getProperty("log.filename"));
 
         // Load the YOLOv8 Model from the models folder
-        String modelPath = "models/license_plate_best.onnx";
+        String modelPath = ConfigLoader.getProperty("model.path");
         Net net;
         try {
             net = Dnn.readNetFromONNX(modelPath);
@@ -60,7 +60,7 @@ public class App {
         Tesseract tesseract = new Tesseract();
         try {
             // The path to the "tessdata" folder
-            tesseract.setDatapath("C:/Program Files/Tesseract-OCR/tessdata");
+            tesseract.setDatapath(ConfigLoader.getProperty("tesseract.path"));
         } catch (Exception e) {
             System.out.println("Error: Could not set the Tesseract data path.");
             System.out.println(e.getMessage());
@@ -68,7 +68,7 @@ public class App {
         }
 
         // Define the URL for the IP Webcam stream
-        String ipCamUrl = "http://192.168.31.214:8080/video";
+        String ipCamUrl = ConfigLoader.getProperty("camera.url");
 
         // Create a VideoCapture object to access the camera stream
         VideoCapture cap = new VideoCapture(ipCamUrl);
@@ -107,7 +107,8 @@ public class App {
 
                 // POST-PROCESSING AND OCR 
                 // Loop through all the detections
-                float confidenceThreshold = 0.5f; // Only consider detections with 50% or more confidence
+                float confidenceThreshold = ConfigLoader.getFloatProperty("detection.confidenceThreshold", 0.5f);
+
                 for (int i = 0; i < detections.rows(); i++) {
                     Mat row = detections.row(i);
                     float confidence = (float) row.get(0, 4)[0];
@@ -145,8 +146,10 @@ public class App {
 
                         // ASPECT RATIO FILTER 
                         // Check the shape of the bounding box to filter out non-plate objects
+                        float minAspectRatio = ConfigLoader.getFloatProperty("detection.minAspectRatio", 1.5f);
+                        float maxAspectRatio = ConfigLoader.getFloatProperty("detection.maxAspectRatio", 5.5f);
                         double aspectRatio = (double) (clampedX2 - clampedX1) / (clampedY2 - clampedY1);
-                        if (aspectRatio < 1.5 || aspectRatio > 5.5) {
+                        if (aspectRatio < minAspectRatio || aspectRatio > maxAspectRatio) {
                             // This is likely not a license plate, skip it
                             // System.out.println("Skipping ROI with invalid aspect ratio: " + aspectRatio);
                             continue;
