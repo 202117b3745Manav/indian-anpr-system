@@ -9,7 +9,9 @@ import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -39,6 +41,7 @@ public class AnprUI extends JFrame {
 
     private final ImageProcessor imageProcessor;
     private final ExcelExporter excelExporter;
+    private final Set<String> processedPlates = new HashSet<>();
 
     public AnprUI() {
         // 1. Initialize Core Components
@@ -144,11 +147,14 @@ public class AnprUI extends JFrame {
             int validPlatesFound = 0;
             for (ProcessResult result : results) {
                 if (result.isValid()) {
-                    // Valid plate: Log it and draw in GREEN
-                    excelExporter.appendRow(result.text, result.getVehicleDetails());
+                    // Check if the plate has already been processed in this session
+                    if (processedPlates.add(result.text)) {
+                        // New plate: Log it to Excel
+                        excelExporter.appendRow(result.text, result.getVehicleDetails());
+                        validPlatesFound++;
+                    }
                     Imgproc.rectangle(frameToProcess, new Point(result.x1, result.y1), new Point(result.x2, result.y2), new Scalar(0, 255, 0), 2);
                     Imgproc.putText(frameToProcess, result.text, new Point(result.x1, result.y1 - 10), Imgproc.FONT_HERSHEY_SIMPLEX, 0.9, new Scalar(0, 255, 0), 2);
-                    validPlatesFound++;
                 } else {
                     // Invalid OCR: Just draw the box in RED for feedback
                     Imgproc.rectangle(frameToProcess, new Point(result.x1, result.y1), new Point(result.x2, result.y2), new Scalar(0, 0, 255), 1);

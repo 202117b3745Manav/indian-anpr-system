@@ -21,7 +21,15 @@ public class ProcessResult {
      * If it is, it fetches the mock vehicle details.
      */
     public boolean isValid() {
-        if (text != null && !text.isEmpty() && text.matches("^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$")) {
+        if (text == null || text.isEmpty()) {
+            return false;
+        }
+        // Regex combining two patterns:
+        // 1. Standard Plates: 2 letters, 1-2 digits, 1-2 letters (excluding I & O), 4 digits.
+        // 2. BH Series Plates: 2 digits, "BH", 4 digits, 1-2 letters (excluding I & O).
+        String plateRegex = "^([A-Z]{2}[0-9]{1,2}[A-HJ-NP-Z]{1,2}[0-9]{4})|([0-9]{2}BH[0-9]{4}[A-HJ-NP-Z]{1,2})$";
+
+        if (text.matches(plateRegex)) {
             this.vehicleDetails = VehicleApiClient.fetchVehicleDetails(text);
             return true;
         }
