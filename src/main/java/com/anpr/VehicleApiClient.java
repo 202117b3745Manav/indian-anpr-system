@@ -19,12 +19,7 @@ public class VehicleApiClient {
      */
     public static VehicleDetails fetchVehicleDetails(String plateNumber) {
         System.out.println("Fetching details for " + plateNumber + "...");
-        try {
-            // Simulate network delay
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        // In a real app, this would be an HttpClient call. For the mock, we remove the blocking sleep.
 
         // Use the plate number's hash code to select mock data deterministically
         int hashCode = Math.abs(plateNumber.hashCode());

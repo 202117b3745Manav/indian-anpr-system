@@ -2,6 +2,8 @@ package com.anpr;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import org.opencv.core.Mat;
@@ -99,7 +101,7 @@ public class DetectionProcessor {
         String rawText = tesseract.doOCR(bufferedImage);
 
         // Post-processing
-        return App.correctPlateFormat(rawText);
+        return correctPlateFormat(rawText);
     }
 
     private BufferedImage matToBufferedImage(Mat mat) {
@@ -109,5 +111,37 @@ public class DetectionProcessor {
         mat.get(0, 0, buffer);
         System.arraycopy(buffer, 0, ((DataBufferByte) image.getRaster().getDataBuffer()).getData(), 0, buffer.length);
         return image;
+    }
+
+    // Helper method to correct common OCR errors on Indian license plates
+    private static String correctPlateFormat(String ocrText) {
+        if (ocrText == null || ocrText.isEmpty()) {
+            return "";
+        }
+
+        String text = ocrText.toUpperCase().replaceAll("[^A-Z0-9]", "");
+
+        // Per-character mappings for common OCR errors
+        Map<Character, Character> perCharMap = new HashMap<>();
+        perCharMap.put('O', '0');
+        perCharMap.put('I', '1');
+        perCharMap.put('Z', '2');
+        perCharMap.put('S', '5');
+        perCharMap.put('B', '8');
+        perCharMap.put('G', '6');
+        perCharMap.put('T', '7');
+
+        StringBuilder cleaned = new StringBuilder();
+        for (char ch : text.toCharArray()) {
+            // Apply direct substitution if exists, otherwise keep the original if it's a letter/digit
+            if (perCharMap.containsKey(ch)) {
+                cleaned.append(perCharMap.get(ch));
+            } else if (Character.isLetterOrDigit(ch)) {
+                cleaned.append(ch);
+            }
+        }
+
+        String cleanedStr = cleaned.toString();
+        return cleanedStr.length() > 10 ? cleanedStr.substring(0, 10) : cleanedStr;
     }
 }

@@ -2,23 +2,26 @@
 
 ## 1. Project Overview
 
-This project is a real-time Automatic Number Plate Recognition (ANPR) system built in Java. It is designed to detect and recognize Indian vehicle license plates from a live video stream, fetch mock vehicle details, and log the detections to an Excel file.
+This project is a user-driven Automatic Number Plate Recognition (ANPR) system built in Java. It features a simple desktop UI, built with Swing, that displays a live video feed from a smartphone camera. The user can capture a frame at any time, and the system will process that single image to detect, read, and log Indian vehicle license plates.
 
-The system uses a custom-trained YOLOv8 model for robust object detection and the Tesseract OCR engine for text extraction. It is built as a capstone project demonstrating skills in computer vision, machine learning integration, and Java application development.
+The system uses a custom-trained YOLOv8 model for robust object detection and the Tesseract OCR engine for text extraction. This capstone project demonstrates skills in computer vision, machine learning integration, and Java desktop application development.
 
 ## 2. Key Features
 
--   **Live Video Capture:** Wirelessly streams video from a smartphone camera using the IP Webcam app.
--   **Real-Time Plate Detection:** Uses a custom-trained YOLOv8 model to accurately detect license plates in real-time.
+-   **Swing Desktop UI:** A user-friendly interface provides a live video feed, a "Capture & Process" button, and a real-time status bar for feedback.
+-   **On-Demand Processing:** The user has full control. Clicking the "Capture & Process" button analyzes a single, high-quality frame, ensuring accurate and deliberate analysis.
 -   **OCR Text Extraction:** Employs Tesseract OCR with image pre-processing and post-processing logic to accurately read plate numbers.
--   **Detection Stabilization:** Averages OCR results over several frames to provide a stable and accurate reading.
+-   **Visual Feedback:** The system generates an annotated output image, drawing **green boxes** around successfully validated plates and **red boxes** around plates that were detected but failed OCR validation.
 -   **Data Validation:** Uses Regex to filter for valid Indian license plate formats, reducing false positives.
 -   **Mock API Integration:** Fetches mock vehicle details for each valid plate to simulate integration with a government database.
 -   **Excel Logging:** Records every unique, valid plate detection with a timestamp and vehicle details into a `detection_log.xlsx` file.
+-   **Image Archiving:** Automatically saves the original captured image to an `input/` folder and the annotated image to an `output/` folder for review.
+
 
 ## 3. Technology Stack
 
 -   **Language:** Java 17
+-   **UI:** Java Swing
 -   **Build & Dependency Management:** Apache Maven
 -   **Computer Vision:** OpenCV 4.9.0
 -   **Object Detection:** YOLOv8 (ONNX model)
@@ -35,22 +38,15 @@ To run this project, you will need to set up the following components:
 -   **Java 17 (JDK):** Ensure you have Java 17 installed and the `JAVA_HOME` environment variable is set.
 -   **Apache Maven:** Ensure Maven is installed and its `bin` directory is in your system's PATH.
 -   **Tesseract OCR Engine:**
-    1.  Download and install Tesseract for Windows from here.
+    1.  Download and install Tesseract for Windows from the official repository.
     2.  During installation, make sure to include the English language data.
-    3.  Ensure the Tesseract installation path is added to your system's PATH. The application expects it to be in `C:\Program Files\Tesseract-OCR`.
+    3.  Ensure the Tesseract installation path is added to your system's PATH. The application's `config.properties` file expects it to be in `C:\Program Files\Tesseract-OCR`.
 
 ### b. Project Setup
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <your-repo-url>
-    cd indian-anpr-system
-    ```
-2.  **Install Maven Dependencies:** Open a terminal in the project root and run:
-    ```bash
-    mvn install
-    ```
-3.  **Place YOLO Model:** Place your trained `license_plate_best.onnx` file into the `models` directory in the project root.
+1.  **Clone the repository** and navigate into the project directory.
+2.  **Place YOLO Model:** Place your trained `license_plate_best.onnx` file into the `models` directory.
+3.  **Configure:** Open `src/main/resources/config.properties` and verify that the `camera.url` and `tesseract.path` are correct for your system.
 
 ### c. Smartphone Camera Setup
 
@@ -58,10 +54,33 @@ To run this project, you will need to set up the following components:
 2.  Connect your phone and your computer to the **same Wi-Fi network**.
 3.  Start the IP Webcam app and select "Start server".
 4.  Note the IP address and port shown on the screen (e.g., `http://192.168.31.214:8080`).
-5.  Update the `ipCamUrl` variable in `src/main/java/com/anpr/App.java` with this address.
+4.  Update the `camera.url` property in `src/main/resources/config.properties` with this address.
 
 ## 5. How to Run
 
-Once all setup steps are complete, you can run the application directly from your IDE (like VS Code or IntelliJ) by running the `main` method in the `App.java` file.
+### a. From the Command Line (Recommended)
 
-A window titled "Live Video Feed" will appear, showing the stream from your phone's camera with bounding boxes around detected license plates. Detected vehicle information will be printed to the console and logged in `detection_log.xlsx`.
+1.  Open a terminal in the project's root directory.
+2.  Build the project and create the executable JAR:
+    ```bash
+    mvn clean package
+    ```
+3.  Navigate to the `target` directory:
+    ```bash
+    cd target
+    ```
+4.  Run the application:
+    ```bash
+    java -jar indian-anpr-system-1.0-SNAPSHOT-jar-with-dependencies.jar
+    ```
+
+### b. From an IDE
+
+You can also run the application directly from your IDE (like VS Code or IntelliJ) by executing the `main` method in the `src/main/java/com/anpr/App.java` file.
+
+### c. Using the Application
+
+1.  A window titled "Indian ANPR System" will appear, showing the live feed from your phone.
+2.  Point the camera at a vehicle and click the **"Capture & Process"** button.
+3.  The status bar will update with the results.
+4.  Check the `output/` folder for the annotated image and the `detection_log.xlsx` file for any validated plate details.
