@@ -24,12 +24,29 @@ public class ProcessResult {
         if (text == null || text.isEmpty()) {
             return false;
         }
-        // Regex combining two patterns:
-        // 1. Standard Plates: 2 letters, 1-2 digits, 1-2 letters (excluding I & O), 4 digits.
-        // 2. BH Series Plates: 2 digits, "BH", 4 digits, 1-2 letters (excluding I & O).
-        String plateRegex = "^([A-Z]{2}[0-9]{1,2}[A-HJ-NP-Z]{1,2}[0-9]{4})|([0-9]{2}BH[0-9]{4}[A-HJ-NP-Z]{1,2})$";
 
-        if (text.matches(plateRegex)) {
+        // --- Regex Components based on MoRTH Standards ---
+        
+        // 1. Valid State/UT Codes (Includes current and some legacy codes like OR/UA)
+        String stateCodes = "(AN|AP|AR|AS|BR|CG|CH|DD|DL|DN|GA|GJ|HP|HR|JH|JK|KA|KL|LA|LD|MH|ML|MN|MP|MZ|NL|OD|OR|PB|PY|RJ|SK|TN|TR|TS|UA|UK|UP|WB)";
+        
+        // 2. District Code: 1 or 2 digits (e.g., 01, 12)
+        String districtCode = "[0-9]{1,2}";
+        
+        // 3. Series: 1 or 2 letters. Excludes I, O, and Q to avoid confusion with 1 and 0.
+        String series = "[A-HJ-NP-PR-Z]{1,2}";
+        
+        // 4. Unique Number: 4 digits (e.g., 1234)
+        String uniqueNumber = "[0-9]{4}";
+
+        // Combine into full patterns
+        // Pattern 1: Standard (e.g., MH12AB1234)
+        String standardPlateRegex = "^" + stateCodes + districtCode + series + uniqueNumber + "$";
+        
+        // Pattern 2: BH Series (e.g., 22BH1234XX)
+        String bhSeriesRegex = "^[0-9]{2}BH" + uniqueNumber + series + "$";
+
+        if (text.matches(standardPlateRegex) || text.matches(bhSeriesRegex)) {
             this.vehicleDetails = VehicleApiClient.fetchVehicleDetails(text);
             return true;
         }
