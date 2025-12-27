@@ -58,6 +58,9 @@ public class VehicleApiClient {
             String formData = "RegistrationNumber=" + URLEncoder.encode(plateNumber, StandardCharsets.UTF_8)
                     + "&username=" + URLEncoder.encode(apiUsername, StandardCharsets.UTF_8);
 
+            logger.info("Sending API Request to: {}", apiUrl);
+            logger.info("Request Payload: {}", formData);
+
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
@@ -66,6 +69,8 @@ public class VehicleApiClient {
                     .build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            logger.info("Received API Response Body: {}", response.body());
 
             if (response.statusCode() == 200) {
                 return parseApiResponse(response.body());

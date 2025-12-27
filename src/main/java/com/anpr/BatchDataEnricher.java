@@ -52,7 +52,16 @@ public class BatchDataEnricher {
         }
 
         logger.info("Batch processing complete.");
-        if (statusCallback != null) statusCallback.accept("Batch processing complete. Saved to " + outputFile);
+        
+        // Reset the input file to avoid re-processing the same data
+        File file = new File(inputFile);
+        if (file.exists() && file.delete()) {
+            logger.info("Input file {} has been reset.", inputFile);
+            if (statusCallback != null) statusCallback.accept("Batch processing complete. Saved to " + outputFile + ". Log reset.");
+        } else {
+            logger.warn("Failed to reset input file {}. Please ensure it is not open.", inputFile);
+            if (statusCallback != null) statusCallback.accept("Batch processing complete. Saved to " + outputFile + ". Warning: Log not reset.");
+        }
     }
 
     private static List<String> readPlatesFromExcel(String filePath) {
