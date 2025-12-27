@@ -125,11 +125,10 @@ public class DetectionProcessor {
         Map<Character, Character> perCharMap = new HashMap<>();
         perCharMap.put('O', '0');
         perCharMap.put('I', '1');
-        perCharMap.put('Z', '2');
         perCharMap.put('S', '5');
         perCharMap.put('B', '8');
         perCharMap.put('G', '6');
-        perCharMap.put('T', '7');
+        perCharMap.put('Y', 'T');
 
         StringBuilder cleaned = new StringBuilder();
         for (char ch : text.toCharArray()) {

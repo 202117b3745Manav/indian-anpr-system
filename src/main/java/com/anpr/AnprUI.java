@@ -35,6 +35,7 @@ public class AnprUI extends JFrame {
     private static final Logger logger = LoggerFactory.getLogger(AnprUI.class);
     private final VideoPanel videoPanel;
     private final JButton captureButton;
+    private final JButton enrichButton;
     private final JLabel statusLabel;
 
     private VideoCapture videoCapture;
@@ -62,9 +63,17 @@ public class AnprUI extends JFrame {
         videoPanel.setPreferredSize(new Dimension(800, 600));
         add(videoPanel, BorderLayout.CENTER);
 
+        JPanel buttonPanel = new JPanel();
+        
         captureButton = new JButton("Capture & Process");
         captureButton.addActionListener(e -> onCapture());
-        add(captureButton, BorderLayout.SOUTH);
+        buttonPanel.add(captureButton);
+
+        enrichButton = new JButton("Enrich Data (API)");
+        enrichButton.addActionListener(e -> onEnrich());
+        buttonPanel.add(enrichButton);
+
+        add(buttonPanel, BorderLayout.SOUTH);
 
         statusLabel = new JLabel("Ready. Please connect to the camera.");
         statusLabel.setBorder(BorderFactory.createLoweredBevelBorder());
@@ -192,6 +201,32 @@ public class AnprUI extends JFrame {
                 SwingUtilities.invokeLater(() -> {
                     statusLabel.setText("Error: " + e.getMessage());
                     captureButton.setEnabled(true);
+                });
+            }
+        }).start();
+    }
+
+    private void onEnrich() {
+        captureButton.setEnabled(false);
+        enrichButton.setEnabled(false);
+        statusLabel.setText("Starting batch enrichment...");
+
+        new Thread(() -> {
+            try {
+                String inputFile = ConfigLoader.getProperty("log.filename");
+                String outputFile = "enriched_" + inputFile;
+
+                BatchDataEnricher.enrichData(inputFile, outputFile, (msg) -> {
+                    SwingUtilities.invokeLater(() -> statusLabel.setText(msg));
+                });
+
+            } catch (Exception e) {
+                logger.error("Error during enrichment", e);
+                SwingUtilities.invokeLater(() -> statusLabel.setText("Error: " + e.getMessage()));
+            } finally {
+                SwingUtilities.invokeLater(() -> {
+                    captureButton.setEnabled(true);
+                    enrichButton.setEnabled(true);
                 });
             }
         }).start();

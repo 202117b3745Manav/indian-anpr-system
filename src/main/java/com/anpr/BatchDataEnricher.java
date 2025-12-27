@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Reads the basic detection log (Plate numbers only), fetches details from the API,
@@ -21,17 +22,27 @@ public class BatchDataEnricher {
     public static void main(String[] args) {
         String inputFile = ConfigLoader.getProperty("log.filename");
         String outputFile = "enriched_" + inputFile;
+        enrichData(inputFile, outputFile, msg -> logger.info(msg));
+    }
 
-        logger.info("Starting batch enrichment...");
-        logger.info("Reading from: {}", inputFile);
-        logger.info("Writing to:   {}", outputFile);
+    public static void enrichData(String inputFile, String outputFile, Consumer<String> statusCallback) {
+        if (statusCallback != null) statusCallback.accept("Starting batch enrichment...");
+        logger.info("Starting batch enrichment. Reading: {}, Writing: {}", inputFile, outputFile);
 
         List<String> plates = readPlatesFromExcel(inputFile);
-        logger.info("Found {} plates to process.", plates.size());
+        
+        if (plates.isEmpty()) {
+            if (statusCallback != null) statusCallback.accept("No plates found in " + inputFile);
+            return;
+        }
+
+        if (statusCallback != null) statusCallback.accept("Found " + plates.size() + " plates. Processing...");
 
         for (int i = 0; i < plates.size(); i++) {
             String plate = plates.get(i);
-            logger.info("[{}/{}] Fetching details for: {}", i + 1, plates.size(), plate);
+            String statusMsg = String.format("[%d/%d] Fetching details for: %s", i + 1, plates.size(), plate);
+            logger.info(statusMsg);
+            if (statusCallback != null) statusCallback.accept(statusMsg);
             
             VehicleDetails details = VehicleApiClient.fetchVehicleDetails(plate);
             ExcelLogger.logVehicleData(outputFile, plate, details);
@@ -40,7 +51,8 @@ public class BatchDataEnricher {
             try { Thread.sleep(500); } catch (InterruptedException e) {}
         }
 
-        logger.info("Batch processing complete. Data saved to {}", outputFile);
+        logger.info("Batch processing complete.");
+        if (statusCallback != null) statusCallback.accept("Batch processing complete. Saved to " + outputFile);
     }
 
     private static List<String> readPlatesFromExcel(String filePath) {
