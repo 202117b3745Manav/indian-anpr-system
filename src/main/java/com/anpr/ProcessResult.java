@@ -47,7 +47,6 @@ public class ProcessResult {
         String bhSeriesRegex = "^[0-9]{2}BH" + uniqueNumber + series + "$";
 
         if (text.matches(standardPlateRegex) || text.matches(bhSeriesRegex)) {
-            this.vehicleDetails = VehicleApiClient.fetchVehicleDetails(text);
             return true;
         }
         return false;

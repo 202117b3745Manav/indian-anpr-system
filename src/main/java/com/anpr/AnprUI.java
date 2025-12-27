@@ -27,9 +27,12 @@ import org.opencv.core.Scalar;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.videoio.VideoCapture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AnprUI extends JFrame {
 
+    private static final Logger logger = LoggerFactory.getLogger(AnprUI.class);
     private final VideoPanel videoPanel;
     private final JButton captureButton;
     private final JLabel statusLabel;
@@ -40,13 +43,11 @@ public class AnprUI extends JFrame {
     private Thread videoThread;
 
     private final ImageProcessor imageProcessor;
-    private final ExcelExporter excelExporter;
     private final Set<String> processedPlates = new HashSet<>();
 
     public AnprUI() {
         // 1. Initialize Core Components
         this.imageProcessor = new ImageProcessor();
-        this.excelExporter = new ExcelExporter(ConfigLoader.getProperty("log.filename"));
 
         // Ensure output directories exist
         new File(ConfigLoader.getProperty("output.input_folder")).mkdirs();
@@ -75,7 +76,6 @@ public class AnprUI extends JFrame {
         // 3. Add Shutdown Hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             stopCamera();
-            excelExporter.close();
         }));
 
         // 4. Start Camera
@@ -84,10 +84,12 @@ public class AnprUI extends JFrame {
 
     private void startCamera() {
         String cameraUrl = ConfigLoader.getProperty("camera.url");
+        logger.info("Attempting to connect to camera at: {}", cameraUrl);
         videoCapture = new VideoCapture(cameraUrl);
 
         if (!videoCapture.isOpened()) {
             statusLabel.setText("Error: Could not connect to camera at " + cameraUrl);
+            logger.error("Failed to open camera stream at {}", cameraUrl);
             return;
         }
 
@@ -95,10 +97,12 @@ public class AnprUI extends JFrame {
         videoThread = new Thread(this::videoLoop);
         videoThread.setDaemon(true);
         videoThread.start();
+        logger.info("Camera connected successfully.");
         statusLabel.setText("Camera connected. Ready to capture.");
     }
 
     private void stopCamera() {
+        logger.info("Stopping camera...");
         isCameraActive = false;
         if (videoThread != null && videoThread.isAlive()) {
             try {
@@ -125,23 +129,28 @@ public class AnprUI extends JFrame {
     private void onCapture() {
         if (currentFrame == null || currentFrame.empty()) {
             statusLabel.setText("Error: No frame available to capture.");
+            logger.warn("Capture attempted but no frame available.");
             return;
         }
 
         captureButton.setEnabled(false);
         statusLabel.setText("Processing...");
+        logger.info("Capture initiated. Processing frame...");
 
         // Run processing in a background thread to keep the UI responsive
         new Thread(() -> {
+            try {
             Mat frameToProcess = currentFrame.clone();
 
             // 1. Save the original captured image
             String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmssSSS").format(LocalDateTime.now());
             String inputFilename = ConfigLoader.getProperty("output.input_folder") + "/capture_" + timestamp + ".png";
             Imgcodecs.imwrite(inputFilename, frameToProcess);
+            logger.debug("Saved input frame to {}", inputFilename);
 
             // 2. Process the image to find plates
             List<ProcessResult> results = imageProcessor.processImage(frameToProcess);
+            logger.info("Image processing complete. Found {} potential plates.", results.size());
 
             // 3. Log to Excel and draw on the output image
             int validPlatesFound = 0;
@@ -150,13 +159,17 @@ public class AnprUI extends JFrame {
                     // Check if the plate has already been processed in this session
                     if (processedPlates.add(result.text)) {
                         // New plate: Log it to Excel
-                        excelExporter.appendRow(result.text, result.getVehicleDetails());
+                        ExcelLogger.logBasicDetection(ConfigLoader.getProperty("log.filename"), result.text);
+                        logger.info("New valid plate found: {}", result.text);
                         validPlatesFound++;
+                    } else {
+                        logger.info("Duplicate plate detected (already processed): {}", result.text);
                     }
                     Imgproc.rectangle(frameToProcess, new Point(result.x1, result.y1), new Point(result.x2, result.y2), new Scalar(0, 255, 0), 2);
                     Imgproc.putText(frameToProcess, result.text, new Point(result.x1, result.y1 - 10), Imgproc.FONT_HERSHEY_SIMPLEX, 0.9, new Scalar(0, 255, 0), 2);
                 } else {
                     // Invalid OCR: Just draw the box in RED for feedback
+                    logger.debug("Invalid OCR result ignored: {}", result.text);
                     Imgproc.rectangle(frameToProcess, new Point(result.x1, result.y1), new Point(result.x2, result.y2), new Scalar(0, 0, 255), 1);
                 }
             }
@@ -164,6 +177,7 @@ public class AnprUI extends JFrame {
             // 4. Save the annotated output image
             String outputFilename = ConfigLoader.getProperty("output.output_folder") + "/processed_" + timestamp + ".png";
             Imgcodecs.imwrite(outputFilename, frameToProcess);
+            logger.info("Saved annotated output to {}", outputFilename);
 
             final int finalValidPlatesFound = validPlatesFound;
 
@@ -173,6 +187,13 @@ public class AnprUI extends JFrame {
                 statusLabel.setText(status);
                 captureButton.setEnabled(true);
             });
+            } catch (Exception e) {
+                logger.error("Error during processing", e);
+                SwingUtilities.invokeLater(() -> {
+                    statusLabel.setText("Error: " + e.getMessage());
+                    captureButton.setEnabled(true);
+                });
+            }
         }).start();
     }
 
