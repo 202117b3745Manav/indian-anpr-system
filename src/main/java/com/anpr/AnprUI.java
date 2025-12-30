@@ -92,22 +92,13 @@ public class AnprUI extends JFrame {
     }
 
     private void startCamera() {
-        String cameraUrl = ConfigLoader.getProperty("camera.url");
-        logger.info("Attempting to connect to camera at: {}", cameraUrl);
-        videoCapture = new VideoCapture(cameraUrl);
-
-        if (!videoCapture.isOpened()) {
-            statusLabel.setText("Error: Could not connect to camera at " + cameraUrl);
-            logger.error("Failed to open camera stream at {}", cameraUrl);
-            return;
-        }
-
+        // Start the video thread immediately. Connection logic is moved to the thread
+        // to prevent UI freezing and allow for auto-reconnection.
         isCameraActive = true;
         videoThread = new Thread(this::videoLoop);
         videoThread.setDaemon(true);
         videoThread.start();
-        logger.info("Camera connected successfully.");
-        statusLabel.setText("Camera connected. Ready to capture.");
+        logger.info("Camera thread started.");
     }
 
     private void stopCamera() {
@@ -126,13 +117,45 @@ public class AnprUI extends JFrame {
     }
 
     private void videoLoop() {
+        String cameraUrl = ConfigLoader.getProperty("camera.url");
         Mat frame = new Mat();
-        while (isCameraActive && videoCapture.read(frame)) {
-            currentFrame = frame.clone();
-            videoPanel.repaint();
+
+        while (isCameraActive) {
+            // 1. Connect if not connected
+            if (videoCapture == null || !videoCapture.isOpened()) {
+                SwingUtilities.invokeLater(() -> statusLabel.setText("Connecting to " + cameraUrl + "..."));
+                logger.info("Attempting to connect to camera at: {}", cameraUrl);
+
+                if (videoCapture != null) videoCapture.release();
+                videoCapture = new VideoCapture(cameraUrl);
+
+                if (videoCapture.isOpened()) {
+                    logger.info("Camera connected successfully.");
+                    SwingUtilities.invokeLater(() -> statusLabel.setText("Camera connected. Ready to capture."));
+                } else {
+                    logger.error("Failed to connect. Retrying in 3 seconds...");
+                    try {
+                        Thread.sleep(3000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    continue;
+                }
+            }
+
+            // 2. Read Frame
+            if (videoCapture.read(frame)) {
+                currentFrame = frame.clone();
+                videoPanel.repaint();
+            } else {
+                logger.warn("Lost connection to camera. Attempting to reconnect...");
+                videoCapture.release(); // Force reconnection in next loop iteration
+            }
         }
-        videoCapture.release();
-        statusLabel.setText("Camera disconnected.");
+        
+        if (videoCapture != null) videoCapture.release();
+        SwingUtilities.invokeLater(() -> statusLabel.setText("Camera disconnected."));
     }
 
     private void onCapture() {
