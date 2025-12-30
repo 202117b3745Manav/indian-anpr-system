@@ -18,6 +18,7 @@ import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
@@ -36,6 +37,8 @@ public class AnprUI extends JFrame {
     private final VideoPanel videoPanel;
     private final JButton captureButton;
     private final JButton enrichButton;
+    private final JToggleButton liveModeButton;
+    private final JButton resetButton;
     private final JLabel statusLabel;
 
     private VideoCapture videoCapture;
@@ -45,6 +48,7 @@ public class AnprUI extends JFrame {
 
     private final ImageProcessor imageProcessor;
     private final Set<String> processedPlates = new HashSet<>();
+    private volatile List<ProcessResult> latestResults;
 
     public AnprUI() {
         // 1. Initialize Core Components
@@ -68,6 +72,14 @@ public class AnprUI extends JFrame {
         captureButton = new JButton("Capture & Process");
         captureButton.addActionListener(e -> onCapture());
         buttonPanel.add(captureButton);
+
+        liveModeButton = new JToggleButton("Live Mode");
+        liveModeButton.addActionListener(e -> toggleLiveMode());
+        buttonPanel.add(liveModeButton);
+
+        resetButton = new JButton("Reset Session");
+        resetButton.addActionListener(e -> onReset());
+        buttonPanel.add(resetButton);
 
         enrichButton = new JButton("Enrich Data (API)");
         enrichButton.addActionListener(e -> onEnrich());
@@ -255,6 +267,66 @@ public class AnprUI extends JFrame {
         }).start();
     }
 
+    private void onReset() {
+        processedPlates.clear();
+        latestResults = null;
+        statusLabel.setText("Session reset. Ready to scan new plates.");
+        videoPanel.repaint();
+    }
+
+    private void toggleLiveMode() {
+        if (liveModeButton.isSelected()) {
+            captureButton.setEnabled(false);
+            enrichButton.setEnabled(false);
+            statusLabel.setText("Live Mode Active - Scanning...");
+            new Thread(this::liveProcessingLoop).start();
+        } else {
+            captureButton.setEnabled(true);
+            enrichButton.setEnabled(true);
+            statusLabel.setText("Live Mode Stopped.");
+            latestResults = null;
+            videoPanel.repaint();
+        }
+    }
+
+    private void liveProcessingLoop() {
+        while (liveModeButton.isSelected() && isCameraActive) {
+            try {
+                if (currentFrame != null && !currentFrame.empty()) {
+                    Mat frameCopy = currentFrame.clone();
+                    List<ProcessResult> results = imageProcessor.processImage(frameCopy);
+                    this.latestResults = results;
+
+                    boolean newPlate = false;
+                    for (ProcessResult result : results) {
+                        if (result.isValid() && processedPlates.add(result.text)) {
+                            ExcelLogger.logBasicDetection(ConfigLoader.getProperty("log.filename"), result.text);
+                            logger.info("Live: New plate found: {}", result.text);
+                            newPlate = true;
+
+                            // Save snapshot for the new plate
+                            String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmssSSS").format(LocalDateTime.now());
+                            String filename = ConfigLoader.getProperty("output.output_folder") + "/live_" + result.text + "_" + timestamp + ".png";
+                            
+                            // Draw on frameCopy for saving
+                            Imgproc.rectangle(frameCopy, new Point(result.x1, result.y1), new Point(result.x2, result.y2), new Scalar(0, 255, 0), 2);
+                            Imgproc.putText(frameCopy, result.text, new Point(result.x1, result.y1 - 10), Imgproc.FONT_HERSHEY_SIMPLEX, 0.9, new Scalar(0, 255, 0), 2);
+                            Imgcodecs.imwrite(filename, frameCopy);
+                        }
+                    }
+
+                    if (newPlate) {
+                        SwingUtilities.invokeLater(() -> statusLabel.setText("New plate detected!"));
+                    }
+                    videoPanel.repaint();
+                }
+                Thread.sleep(200); // Process ~5 FPS to avoid CPU overload
+            } catch (Exception e) {
+                logger.error("Error in live loop", e);
+            }
+        }
+    }
+
     // Inner class for the video panel
     private class VideoPanel extends JPanel {
         @Override
@@ -262,6 +334,27 @@ public class AnprUI extends JFrame {
             super.paintComponent(g);
             if (currentFrame != null && !currentFrame.empty()) {
                 g.drawImage(matToBufferedImage(currentFrame), 0, 0, this.getWidth(), this.getHeight(), null);
+                
+                if (latestResults != null && !latestResults.isEmpty()) {
+                    double scaleX = (double) getWidth() / currentFrame.cols();
+                    double scaleY = (double) getHeight() / currentFrame.rows();
+                    
+                    for (ProcessResult result : latestResults) {
+                        int x = (int) (result.x1 * scaleX);
+                        int y = (int) (result.y1 * scaleY);
+                        int w = (int) ((result.x2 - result.x1) * scaleX);
+                        int h = (int) ((result.y2 - result.y1) * scaleY);
+                        
+                        if (result.isValid()) {
+                            g.setColor(Color.GREEN);
+                            g.drawString(result.text, x, y - 5);
+                        } else {
+                            g.setColor(Color.RED);
+                        }
+                        ((java.awt.Graphics2D) g).setStroke(new java.awt.BasicStroke(2));
+                        g.drawRect(x, y, w, h);
+                    }
+                }
             } else {
                 g.setColor(Color.BLACK);
                 g.fillRect(0, 0, getWidth(), getHeight());
