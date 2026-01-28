@@ -9,9 +9,11 @@ import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -47,8 +49,10 @@ public class AnprUI extends JFrame {
     private Thread videoThread;
 
     private final ImageProcessor imageProcessor;
-    private final Set<String> processedPlates = new HashSet<>();
+    private final Set<String> processedPlates = ConcurrentHashMap.newKeySet();
     private volatile List<ProcessResult> latestResults;
+    private final ExecutorService executorService = Executors.newCachedThreadPool();
+    private final Object frameLock = new Object();
 
     public AnprUI() {
         // 1. Initialize Core Components
@@ -126,6 +130,7 @@ public class AnprUI extends JFrame {
         if (videoCapture != null && videoCapture.isOpened()) {
             videoCapture.release();
         }
+        executorService.shutdown();
     }
 
     private void videoLoop() {
@@ -158,7 +163,10 @@ public class AnprUI extends JFrame {
 
             // 2. Read Frame
             if (videoCapture.read(frame)) {
-                currentFrame = frame.clone();
+                synchronized (frameLock) {
+                    if (currentFrame != null) currentFrame.release();
+                    currentFrame = frame.clone();
+                }
                 videoPanel.repaint();
             } else {
                 logger.warn("Lost connection to camera. Attempting to reconnect...");
@@ -171,20 +179,27 @@ public class AnprUI extends JFrame {
     }
 
     private void onCapture() {
-        if (currentFrame == null || currentFrame.empty()) {
-            statusLabel.setText("Error: No frame available to capture.");
-            logger.warn("Capture attempted but no frame available.");
-            return;
-        }
-
         captureButton.setEnabled(false);
         statusLabel.setText("Processing...");
         logger.info("Capture initiated. Processing frame...");
 
         // Run processing in a background thread to keep the UI responsive
-        new Thread(() -> {
+        executorService.submit(() -> {
+            Mat frameToProcess = null;
             try {
-            Mat frameToProcess = currentFrame.clone();
+                synchronized (frameLock) {
+                    if (currentFrame != null && !currentFrame.empty()) {
+                        frameToProcess = currentFrame.clone();
+                    }
+                }
+
+                if (frameToProcess == null) {
+                    SwingUtilities.invokeLater(() -> {
+                        statusLabel.setText("Error: No frame available.");
+                        captureButton.setEnabled(true);
+                    });
+                    return;
+                }
 
             // 1. Save the original captured image
             String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmssSSS").format(LocalDateTime.now());
@@ -238,7 +253,10 @@ public class AnprUI extends JFrame {
                     captureButton.setEnabled(true);
                 });
             }
-        }).start();
+            finally {
+                if (frameToProcess != null) frameToProcess.release();
+            }
+        });
     }
 
     private void onEnrich() {
@@ -246,7 +264,7 @@ public class AnprUI extends JFrame {
         enrichButton.setEnabled(false);
         statusLabel.setText("Starting batch enrichment...");
 
-        new Thread(() -> {
+        executorService.submit(() -> {
             try {
                 String inputFile = ConfigLoader.getProperty("log.filename");
                 String outputFile = "enriched_" + inputFile;
@@ -264,7 +282,7 @@ public class AnprUI extends JFrame {
                     enrichButton.setEnabled(true);
                 });
             }
-        }).start();
+        });
     }
 
     private void onReset() {
@@ -292,8 +310,13 @@ public class AnprUI extends JFrame {
     private void liveProcessingLoop() {
         while (liveModeButton.isSelected() && isCameraActive) {
             try {
-                if (currentFrame != null && !currentFrame.empty()) {
-                    Mat frameCopy = currentFrame.clone();
+                Mat frameCopy = null;
+                synchronized (frameLock) {
+                    if (currentFrame != null && !currentFrame.empty()) {
+                        frameCopy = currentFrame.clone();
+                    }
+                }
+                if (frameCopy != null) {
                     List<ProcessResult> results = imageProcessor.processImage(frameCopy);
                     this.latestResults = results;
 
@@ -319,6 +342,7 @@ public class AnprUI extends JFrame {
                         SwingUtilities.invokeLater(() -> statusLabel.setText("New plate detected!"));
                     }
                     videoPanel.repaint();
+                    frameCopy.release();
                 }
                 Thread.sleep(200); // Process ~5 FPS to avoid CPU overload
             } catch (Exception e) {
@@ -332,34 +356,36 @@ public class AnprUI extends JFrame {
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
-            if (currentFrame != null && !currentFrame.empty()) {
-                g.drawImage(matToBufferedImage(currentFrame), 0, 0, this.getWidth(), this.getHeight(), null);
+            synchronized (frameLock) {
+                if (currentFrame != null && !currentFrame.empty()) {
+                    g.drawImage(matToBufferedImage(currentFrame), 0, 0, this.getWidth(), this.getHeight(), null);
                 
-                if (latestResults != null && !latestResults.isEmpty()) {
-                    double scaleX = (double) getWidth() / currentFrame.cols();
-                    double scaleY = (double) getHeight() / currentFrame.rows();
-                    
-                    for (ProcessResult result : latestResults) {
-                        int x = (int) (result.x1 * scaleX);
-                        int y = (int) (result.y1 * scaleY);
-                        int w = (int) ((result.x2 - result.x1) * scaleX);
-                        int h = (int) ((result.y2 - result.y1) * scaleY);
+                    if (latestResults != null && !latestResults.isEmpty()) {
+                        double scaleX = (double) getWidth() / currentFrame.cols();
+                        double scaleY = (double) getHeight() / currentFrame.rows();
                         
-                        if (result.isValid()) {
-                            g.setColor(Color.GREEN);
-                            g.drawString(result.text, x, y - 5);
-                        } else {
-                            g.setColor(Color.RED);
+                        for (ProcessResult result : latestResults) {
+                            int x = (int) (result.x1 * scaleX);
+                            int y = (int) (result.y1 * scaleY);
+                            int w = (int) ((result.x2 - result.x1) * scaleX);
+                            int h = (int) ((result.y2 - result.y1) * scaleY);
+                            
+                            if (result.isValid()) {
+                                g.setColor(Color.GREEN);
+                                g.drawString(result.text, x, y - 5);
+                            } else {
+                                g.setColor(Color.RED);
+                            }
+                            ((java.awt.Graphics2D) g).setStroke(new java.awt.BasicStroke(2));
+                            g.drawRect(x, y, w, h);
                         }
-                        ((java.awt.Graphics2D) g).setStroke(new java.awt.BasicStroke(2));
-                        g.drawRect(x, y, w, h);
                     }
+                } else {
+                    g.setColor(Color.BLACK);
+                    g.fillRect(0, 0, getWidth(), getHeight());
+                    g.setColor(Color.WHITE);
+                    g.drawString("Connecting to camera...", 20, 30);
                 }
-            } else {
-                g.setColor(Color.BLACK);
-                g.fillRect(0, 0, getWidth(), getHeight());
-                g.setColor(Color.WHITE);
-                g.drawString("Connecting to camera...", 20, 30);
             }
         }
     }
