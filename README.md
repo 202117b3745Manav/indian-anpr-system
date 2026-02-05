@@ -1,86 +1,83 @@
 # Indian Vehicle Automatic Number Plate Recognition (ANPR) System
 
-## 1. Project Overview
+## Project Abstract
 
-This project is a user-driven Automatic Number Plate Recognition (ANPR) system built in Java. It features a simple desktop UI, built with Swing, that displays a live video feed from a smartphone camera. The user can capture a frame at any time, and the system will process that single image to detect, read, and log Indian vehicle license plates.
+This application is a specialized desktop solution designed for the detection and recognition of Indian vehicle license plates in real-time. Built using Java and Computer Vision technologies, it bridges the gap between raw video feeds and actionable data. The system offers dual operational modes—manual capture for high-precision analysis and a live mode for continuous monitoring—making it suitable for security checkpoints, parking management, or traffic analysis.
 
-The system uses a custom-trained YOLOv8 model for robust object detection and the Tesseract OCR engine for text extraction. This capstone project demonstrates skills in computer vision, machine learning integration, and Java desktop application development.
+## Core Features
 
-## 2. Key Features
+### 1. Intelligent Detection Pipeline
+*   **YOLOv8 Integration:** Utilizes a custom-trained ONNX model to detect license plates with high accuracy, even in complex visual environments.
+*   **Optimized OCR Engine:** Leverages Tesseract 5 with specific tuning for Indian syntax. This includes character whitelisting (A-Z, 0-9) and single-line page segmentation to significantly reduce processing time and improve accuracy.
+*   **Regex Validation:** Implements strict pattern matching based on Ministry of Road Transport and Highways (MoRTH) standards (e.g., standard `MH12AB1234` and BH Series) to filter out false positives.
 
--   **Swing Desktop UI:** A user-friendly interface provides a live video feed, a "Capture & Process" button, and a real-time status bar for feedback.
--   **On-Demand Processing:** The user has full control. Clicking the "Capture & Process" button analyzes a single, high-quality frame, ensuring accurate and deliberate analysis.
--   **OCR Text Extraction:** Employs Tesseract OCR with image pre-processing and post-processing logic to accurately read plate numbers.
--   **Visual Feedback:** The system generates an annotated output image, drawing **green boxes** around successfully validated plates and **red boxes** around plates that were detected but failed OCR validation.
--   **Data Validation:** Uses Regex to filter for valid Indian license plate formats, reducing false positives.
--   **Mock API Integration:** Fetches mock vehicle details for each valid plate to simulate integration with a government database.
--   **Excel Logging:** Records every unique, valid plate detection with a timestamp and vehicle details into a `detection_log.xlsx` file.
--   **Image Archiving:** Automatically saves the original captured image to an `input/` folder and the annotated image to an `output/` folder for review.
+### 2. Dual Operational Modes
+*   **Live Surveillance Mode:** Continuously scans the camera feed, detecting and logging unique plates automatically without user intervention.
+*   **Capture & Process:** Allows operators to freeze a specific frame for detailed inspection and logging, ideal for manned entry points.
 
+### 3. Data Management & Enrichment
+*   **Automated Logging:** Every valid detection is timestamped and logged into an Excel spreadsheet (`.xlsx`), creating an immediate audit trail.
+*   **Batch Data Enrichment:** Includes a dedicated module to process logged plate numbers against an external Vehicle Registration API. This fetches and appends details like Owner Name, Vehicle Model, and Registration Date to the records.
+*   **Visual Evidence:** Automatically archives the original capture and the processed output (with bounding boxes) for verification purposes.
 
-## 3. Technology Stack
+## Technical Architecture
 
--   **Language:** Java 17
--   **UI:** Java Swing
--   **Build & Dependency Management:** Apache Maven
--   **Computer Vision:** OpenCV 4.9.0
--   **Object Detection:** YOLOv8 (ONNX model)
--   **OCR:** Tesseract 5 with Tess4J wrapper
--   **API & JSON:** Gson for parsing mock API responses
--   **Excel Export:** Apache POI
+The system is built on a robust multi-threaded architecture to ensure the User Interface (UI) remains responsive during heavy image processing tasks.
 
-## 4. Setup and Installation
+*   **Frontend:** Java Swing provides the graphical interface, rendering the video feed and status updates.
+*   **Computer Vision:** OpenCV (via Java bindings) handles image manipulation, resizing, and drawing bounding boxes.
+*   **Deep Learning:** The `Dnn` module of OpenCV loads the YOLOv8 neural network for object detection.
+*   **Text Recognition:** Tess4J acts as the Java wrapper for the Tesseract OCR engine.
+*   **Concurrency:** Dedicated threads manage video capture, live inference loops, and UI updates independently to prevent freezing.
 
-To run this project, you will need to set up the following components:
+## Getting Started
 
-### a. Prerequisites
+### Prerequisites
+*   **Java Development Kit (JDK) 17** or higher.
+*   **Maven** for dependency management.
+*   **Tesseract OCR:** Must be installed on the host machine (Windows/Linux). The path must be configured in the application properties.
+*   **IP Webcam (Android):** The system is designed to ingest video streams via HTTP (e.g., from a smartphone running an IP Webcam app).
 
--   **Java 17 (JDK):** Ensure you have Java 17 installed and the `JAVA_HOME` environment variable is set.
--   **Apache Maven:** Ensure Maven is installed and its `bin` directory is in your system's PATH.
--   **Tesseract OCR Engine:**
-    1.  Download and install Tesseract for Windows from the official repository.
-    2.  During installation, make sure to include the English language data.
-    3.  Ensure the Tesseract installation path is added to your system's PATH. The application's `config.properties` file expects it to be in `C:\Program Files\Tesseract-OCR`.
+### Installation & Configuration
 
-### b. Project Setup
+1.  **Clone the Repository**
+    ```bash
+    git clone <repository-url>
+    ```
 
-1.  **Clone the repository** and navigate into the project directory.
-2.  **Place YOLO Model:** Place your trained `license_plate_best.onnx` file into the `models` directory.
-3.  **Configure:** Open `src/main/resources/config.properties` and verify that the `camera.url` and `tesseract.path` are correct for your system.
+2.  **Model Setup**
+    Place your trained YOLO model (`license_plate_best.onnx`) in the `models/` directory.
 
-### c. Smartphone Camera Setup
+3.  **Configuration**
+    Edit `src/main/resources/config.properties` to match your environment:
+    *   `camera.url`: The IP address of your video feed (e.g., `http://192.168.1.100:8080/video`).
+    *   `tesseract.path`: The absolute path to your Tesseract installation.
+    *   `api.url` & `api.username`: Credentials for the vehicle registration API.
 
-1.  Install the **IP Webcam** app on your Android smartphone.
-2.  Connect your phone and your computer to the **same Wi-Fi network**.
-3.  Start the IP Webcam app and select "Start server".
-4.  Note the IP address and port shown on the screen (e.g., `http://192.168.31.214:8080`).
-4.  Update the `camera.url` property in `src/main/resources/config.properties` with this address.
-
-## 5. How to Run
-
-### a. From the Command Line (Recommended)
-
-1.  Open a terminal in the project's root directory.
-2.  Build the project and create the executable JAR:
+4.  **Build the Project**
     ```bash
     mvn clean package
     ```
-3.  Navigate to the `target` directory:
-    ```bash
-    cd target
-    ```
-4.  Run the application:
+
+### Usage Guide
+
+1.  **Launch the Application:**
+    Run the generated JAR file from the `target` directory:
     ```bash
     java -jar indian-anpr-system-1.0-SNAPSHOT-jar-with-dependencies.jar
     ```
 
-### b. From an IDE
+2.  **Connect Camera:**
+    The system attempts to connect to the configured URL on startup. Ensure your IP camera is online.
 
-You can also run the application directly from your IDE (like VS Code or IntelliJ) by executing the `main` method in the `src/main/java/com/anpr/App.java` file.
+3.  **Manual Capture:**
+    Click "Capture & Process" to analyze the current view.
 
-### c. Using the Application
+4.  **Live Mode:**
+    Toggle "Live Mode" to start automatic scanning. Valid plates are logged to Excel immediately.
 
-1.  A window titled "Indian ANPR System" will appear, showing the live feed from your phone.
-2.  Point the camera at a vehicle and click the **"Capture & Process"** button.
-3.  The status bar will update with the results.
-4.  Check the `output/` folder for the annotated image and the `detection_log.xlsx` file for any validated plate details.
+5.  **Enrich Data:**
+    Click "Enrich Data (API)" to process the Excel log and fetch vehicle ownership details for all recorded plates.
+    
+---
+*Developed as a Capstone Project demonstrating the integration of Deep Learning, OCR, and Software Engineering principles.*
