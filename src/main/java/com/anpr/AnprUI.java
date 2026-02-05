@@ -344,7 +344,7 @@ public class AnprUI extends JFrame {
                     videoPanel.repaint();
                     frameCopy.release();
                 }
-                Thread.sleep(200); // Process ~5 FPS to avoid CPU overload
+                Thread.sleep(50); // Reduced sleep: Target ~20 FPS if hardware allows
             } catch (Exception e) {
                 logger.error("Error in live loop", e);
             }

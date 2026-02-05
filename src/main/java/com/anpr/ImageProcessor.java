@@ -41,7 +41,7 @@ public class ImageProcessor {
         this.confidenceThreshold = ConfigLoader.getFloatProperty("detection.confidenceThreshold", 0.5f);
     }
 
-    public List<ProcessResult> processImage(Mat frame) {
+    public synchronized List<ProcessResult> processImage(Mat frame) {
         List<ProcessResult> validResults = new ArrayList<>();
 
         // 1. Prepare frame for YOLO

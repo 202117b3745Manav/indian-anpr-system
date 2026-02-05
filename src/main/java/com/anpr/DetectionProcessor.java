@@ -15,6 +15,7 @@ import org.opencv.imgproc.Imgproc;
 
 import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.TesseractException;
+import net.sourceforge.tess4j.ITessAPI;
 
 /**
  * Handles the processing of a single detected object from the YOLO model.
@@ -27,6 +28,12 @@ public class DetectionProcessor {
     public DetectionProcessor(Tesseract tesseract, Pattern platePattern) {
         this.tesseract = tesseract;
         this.platePattern = platePattern;
+        
+        // --- Performance Optimization ---
+        // 1. Whitelist only uppercase alphanumeric characters to prevent symbol guessing
+        this.tesseract.setTessVariable("tessedit_char_whitelist", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
+        // 2. Set Page Segmentation Mode to 7 (Treat the image as a single text line)
+        this.tesseract.setPageSegMode(ITessAPI.TessPageSegMode.PSM_SINGLE_LINE);
     }
 
     /**
